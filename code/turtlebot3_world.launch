@@ -1,0 +1,59 @@
+<launch>
+  <!-- Original TurtleBot3 Parameters -->
+  <arg name="model" default="burger" doc="model type [burger, waffle, waffle_pi]"/>  
+  <arg name="x_pos" default="-2.0"/>
+  <arg name="y_pos" default="-0.5"/>
+  <arg name="z_pos" default="0.0"/>
+
+  <!-- Launch Gazebo with Empty World -->
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(find turtlebot3_gazebo)/worlds/turtlebot3_world.world"/>
+    <arg name="paused" value="false"/>
+    <arg name="use_sim_time" value="true"/>
+    <arg name="gui" value="true"/>
+    <arg name="headless" value="false"/>
+    <arg name="debug" value="false"/>
+  </include>
+
+  <!-- Spawn TurtleBot3 in Gazebo -->
+  <param name="robot_description" command="$(find xacro)/xacro --inorder $(find turtlebot3_description)/urdf/turtlebot3_$(arg model).urdf.xacro" />
+  <node pkg="gazebo_ros" type="spawn_model" name="spawn_urdf" args="-urdf -model turtlebot3_$(arg model) -x $(arg x_pos) -y $(arg y_pos) -z $(arg z_pos) -param robot_description" />
+
+  <!-- VRPN Client to Receive Real OptiTrack Data -->
+  <node pkg="vrpn_client_ros" type="vrpn_client_node" name="vrpn_client_node" output="screen">
+    <rosparam subst_value="true">
+      server: "10.8.2.136"  <!-- Replace with the actual IP address of the OptiTrack system -->
+      port: 3883
+      update_frequency: 100.0
+      frame_id: "world"
+      use_server_time: false
+      broadcast_tf: true
+      trackers:
+        - TestBody
+    </rosparam>
+  </node>
+
+  <!-- Static Transform from world to optitrack -->
+  <node pkg="tf" type="static_transform_publisher" name="world_to_optitrack" args="0 0 0 0 0 0 world optitrack 100" />
+
+  <!-- Static Transform from TestBody (OptiTrack) to base_link -->
+  <node pkg="tf" type="static_transform_publisher" name="testbody_to_base_link" 
+        args="0 0 0 0 0 0 /TestBody /base_link 100" />
+
+  <!-- Disable odom transform publication by TurtleBot -->
+  <!-- The base_link will now be handled by the optitrack system -->
+  <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher" output="screen">
+    <param name="publish_frequency" value="50.0" />
+    <param name="use_sim_time" value="true" />
+    <remap from="/odom" to="/fake_odom" />
+  </node>
+
+  <!-- Optional: EKF Localization Node (if you decide to use it for sensor fusion) -->
+  <!-- Uncomment if EKF is needed for fusing with other sensors -->
+  <!--
+  <node pkg="robot_localization" type="ekf_localization_node" name="ekf_localization_node" output="screen">
+    <param name="use_sim_time" value="true"/>
+    <rosparam command="load" file="/home/tom/Dev/turtlebot_ws/src/turtlebot3/turtlebot3/config/turtlebot3_ekf.yaml"/>
+  </node>
+  -->
+</launch>
