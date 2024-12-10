@@ -1,123 +1,175 @@
-# ROS2 Humble Setup Guide with Docker, rosbridge_websocket, and ROSbot Simulation
+# OptiTrack Motion Capture Setup Guide with VRPN and TurtleBot3 on ROS Melodic and WSL (Windows Subsystem for Linux)
 
 ## Prerequisites
+- **ROS Melodic** is already installed on your WSL machine.
+- **OptiTrack Motive** is installed and running on your Windows machine.
+- **TurtleBot3** packages are installed and configured.
 
-- **Docker** is installed and running on your system.
-- **Visual Studio Code (VSCode)** is installed, along with the Remote Development extension.
+## Steps to Configure and Connect VRPN with TurtleBot3 Using Real OptiTrack Data
 
----
+### 1. Install the vrpn_client_ros Package
 
-## Steps to Set Up ROS2 Humble and Associated Tools
+Install the VRPN Client ROS Package:  
+Open a terminal in WSL and run:
 
-### Step 1: Set Up ROS2 Humble in Docker
+bash
+sudo apt-get update
+sudo apt-get install ros-melodic-vrpn-client-ros
 
-1. Open Visual Studio Code (VSCode).
-2. Install the **Remote Development** extension.
-3. Open the bottom-left menu (`><`) in VSCode and select **New Dev Container**.
-4. Search for `ros2` and select the **ROS2 Workspace BrunoB81HK** option.
-5. Once the setup is complete, validate the ROS2 installation by running the following command in the terminal:
 
-   ```bash
-   ls /opt/ros
-   ```
 
-   You should see the available ROS2 distributions, including `humble`.
+### 2. Configure Motive (on Windows)
 
----
+Enable VRPN Streaming:
+- Open OptiTrack Motive on your Windows machine.
+- Go to **Data Streaming Settings** and enable **VRPN**.
+- Copy the port number (default is 3883) from Motive for later use in the ROS launch file.
 
-### Step 2: Install and Configure `rosbridge_websocket`
+Check Firewall Settings:
+- Allow traffic on the VRPN port in your Windows firewall.
+- Go to **Windows Firewall with Advanced Security** > **Inbound Rules**, and create a new rule allowing UDP traffic on the VRPN port.
 
-1. **Install the `rosbridge_server` Package**:
+### 3. Set Up the TurtleBot3 and OptiTrack Integration
 
-   ```bash
-   sudo apt update && sudo apt install -y ros-humble-rosbridge-server
-   ```
+Now, we will configure the TurtleBot3 to be controlled based on the motion capture data streamed from OptiTrack via VRPN.
 
-2. **Verify the Installation**:
+1. **Create a Launch File for TurtleBot3 Using VRPN**:
 
-   ```bash
-   ros2 pkg list | grep rosbridge_server
-   ```
+Create a new launch file in your Catkin workspace:
 
-   Ensure `rosbridge_server` is listed in the output.
+bash
+mkdir -p ~/turtlebot3_ws/src/turtlebot3/launch
+nano ~/turtlebot3_ws/src/turtlebot3/launch/turtlebot3_vrpn.launch
 
-3. **Launch the WebSocket Server**:
 
-   ```bash
-   ros2 launch rosbridge_server rosbridge_websocket_launch.xml
-   ```
 
-   This starts the WebSocket server on the default port (9090), allowing communication between ROS2 and external systems.
+2. **Paste the Following Content into the File**:
 
-4. **Optional - Run Manually Without Launch File**:
+xml
+<launch>
+  <!-- Original TurtleBot3 Parameters -->
+  <arg name="model" default="burger" doc="model type [burger, waffle, waffle_pi]"/>  
+  <arg name="x_pos" default="-2.0"/>
+  <arg name="y_pos" default="-0.5"/>
+  <arg name="z_pos" default="0.0"/>
 
-   ```bash
-   ros2 run rosbridge_server rosbridge_websocket
-   ```
+  <!-- Launch Gazebo with Empty World -->
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(find turtlebot3_gazebo)/worlds/turtlebot3_world.world"/>
+    <arg name="paused" value="false"/>
+    <arg name="use_sim_time" value="true"/>
+    <arg name="gui" value="true"/>
+    <arg name="headless" value="false"/>
+    <arg name="debug" value="false"/>
+  </include>
 
----
+  <!-- Spawn TurtleBot3 in Gazebo -->
+  <param name="robot_description" command="$(find xacro)/xacro --inorder $(find turtlebot3_description)/urdf/turtlebot3_$(arg model).urdf.xacro" />
+  <node pkg="gazebo_ros" type="spawn_model" name="spawn_urdf" args="-urdf -model turtlebot3_$(arg model) -x $(arg x_pos) -y $(arg y_pos) -z $(arg z_pos) -param robot_description" />
 
-### Step 3: Install and Run ROSbot Simulation
+  <!-- VRPN Client to Receive Real OptiTrack Data -->
+  <node pkg="vrpn_client_ros" type="vrpn_client_node" name="vrpn_client_node" output="screen">
+    <rosparam subst_value="true">
+      server: "Your_Windows_IP"  <!-- Replace with your Windows IP address -->
+      port: 3883
+      update_frequency: 100.0
+      frame_id: "world"
+      use_server_time: false
+      broadcast_tf: true
+      trackers:
+        - TestBody  <!-- Replace with your actual rigid body name in Motive -->
+    </rosparam>
+  </node>
 
-1. **Set Up the ROSbot Gazebo Simulation**:
+  <!-- Static Transform from world to optitrack -->
+  <node pkg="tf" type="static_transform_publisher" name="world_to_optitrack" args="0 0 0 0 0 0 world optitrack 100" />
 
-   Clone and build the ROSbot repository:
+  <!-- Static Transform from TestBody (OptiTrack) to base_link -->
+  <node pkg="tf" type="static_transform_publisher" name="testbody_to_base_link" 
+        args="0 0 0 0 0 0 /TestBody /base_link 100" />
 
-   ```bash
-   git clone https://github.com/husarion/rosbot_ros.git
-   cd rosbot_ros
-   colcon build
-   ```
+  <!-- Disable odom transform publication by TurtleBot -->
+  <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher" output="screen">
+    <param name="publish_frequency" value="50.0" />
+    <param name="use_sim_time" value="true" />
+    <remap from="/odom" to="/fake_odom" />
+  </node>
+</launch>
 
-2. **Run the ROSbot Simulation**:
 
-   Launch the simulation in Gazebo:
 
-   ```bash
-   source install/setup.bash
-   ros2 launch rosbot_gazebo simulation.launch.py
-   ```
+Replace "Your_Windows_IP" with your actual Windows IP (use ipconfig to find it).  
+Replace "TestBody" with the actual name of the rigid body being tracked by Motive.
 
-3. **Simulate Multiple Robots**:
+3. **Build and Source the Workspace**:
 
-   To launch multiple robots in the simulation, use the following command:
+After creating the launch file, build and source your workspace:
 
-   ```bash
-   ros2 launch rosbot_gazebo simulation.launch.py robots:="robot1={x: 0.0, y: 0.0, yaw: 0.0}; robot2={x: 2.0, y: 0.0, yaw: 1.57};"
-   ```
+bash
+cd ~/turtlebot3_ws
+catkin_make
+source devel/setup.bash
 
----
 
-## Testing and Verification
 
-1. **Verify ROS2 is Running in the Container**:
+### 4. Important Note for WSL Users
 
-   Check that ROS2 commands work by listing installed packages:
+When using WSL, do **not** use 127.0.0.1 for the VRPN server address. The IP 127.0.0.1 refers to the WSL environment and not your Windows machine. Instead, use the IP address of your Windows machine (e.g., 10.8.2.136), which you can find by running ipconfig in a Windows command prompt.
 
-   ```bash
-   ros2 pkg list
-   ```
+### 5. Test the Setup
 
-2. **Test the `rosbridge_websocket` Server**:
+1. **Start Motive** on your Windows machine and ensure the VRPN server is running.
 
-   Confirm that the WebSocket server is running by connecting to port 9090 with a WebSocket client.
+2. **Launch the TurtleBot3 and VRPN Setup** in WSL:
 
-3. **Check ROSbot Simulation**:
+bash
+export TURTLEBOT3_MODEL=burger
+roslaunch turtlebot3 turtlebot3_vrpn.launch
 
-   Use Rviz to visualize the ROSbot simulation:
-   - Launch Rviz:
-     ```bash
-     rviz
-     ```
-   - Add the **RobotModel** display to visualize the ROSbot.
-   - Set the **Fixed Frame** to `world`.
 
----
 
-## Troubleshooting
+### 6. Verify the Setup in ROS
 
-1. **Docker Issues**: Ensure Docker is installed and running properly on your system. Test by running `docker --version`.
-2. **Network Configuration**: If you're connecting to the WebSocket server from an external machine, ensure the port (9090) is open in your firewall.
-3. **Simulation Performance**: For large-scale simulations with multiple robots, consider increasing the resources allocated to your Docker container.
+1. **Check for VRPN Topics**:
 
-By following these steps, you will have a fully operational ROS2 Humble setup in Docker with `rosbridge_websocket` and ROSbot simulation running in Gazebo.
+Verify that the VRPN topics are available in ROS by running:
+
+bash
+rostopic list
+
+
+
+You should see topics like /vrpn/TestBody/pose.
+
+2. **Inspect the Pose Data**:
+
+Inspect the pose data of the tracked body from OptiTrack:
+
+bash
+rostopic echo /vrpn/TestBody/pose
+
+
+
+3. **Visualize the Setup in RViz**:
+
+Open RViz by running:
+
+bash
+rviz
+
+
+
+In RViz, follow these steps:
+- Click the **"Add"** button in the lower-left corner.
+- Select **"By Topic"** and expand the /vrpn topic.
+- Choose the **"Pose"** option under /vrpn/TestBody/pose to visualize the tracked pose.
+- Add a **RobotModel** display to visualize the TurtleBot3 model.
+- Set the **Fixed Frame** to world.
+
+### Troubleshooting
+
+1. **Connection Issues**: Ensure that Motive and ROS can communicate over the same network using the correct IP address of the Windows machine.
+2. **Firewall Issues**: Ensure that firewall rules allow traffic over the VRPN port (default 3883).
+3. **Network Configuration**: If using WSL, use your Windows IP (not 127.0.0.1) for the VRPN server address.
+
+With these steps, you should now be able to control and visualize TurtleBot3 using real-time OptiTrack motion capture data streamed over VRPN in ROS Melodic.
