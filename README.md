@@ -1,3 +1,4 @@
+
 # OptiTrack Motion Capture Setup Guide with VRPN and TurtleBot3 on ROS Melodic and WSL (Windows Subsystem for Linux)
 
 ## Prerequisites
@@ -7,16 +8,15 @@
 
 ## Steps to Configure and Connect VRPN with TurtleBot3 Using Real OptiTrack Data
 
-### 1. Install the vrpn_client_ros Package
+### 1. Install the `vrpn_client_ros` Package
 
 Install the VRPN Client ROS Package:  
 Open a terminal in WSL and run:
 
-bash
+```bash
 sudo apt-get update
 sudo apt-get install ros-melodic-vrpn-client-ros
-
-
+```
 
 ### 2. Configure Motive (on Windows)
 
@@ -37,15 +37,14 @@ Now, we will configure the TurtleBot3 to be controlled based on the motion captu
 
 Create a new launch file in your Catkin workspace:
 
-bash
+```bash
 mkdir -p ~/turtlebot3_ws/src/turtlebot3/launch
 nano ~/turtlebot3_ws/src/turtlebot3/launch/turtlebot3_vrpn.launch
-
-
+```
 
 2. **Paste the Following Content into the File**:
 
-xml
+```xml
 <launch>
   <!-- Original TurtleBot3 Parameters -->
   <arg name="model" default="burger" doc="model type [burger, waffle, waffle_pi]"/>  
@@ -95,26 +94,24 @@ xml
     <remap from="/odom" to="/fake_odom" />
   </node>
 </launch>
+```
 
-
-
-Replace "Your_Windows_IP" with your actual Windows IP (use ipconfig to find it).  
-Replace "TestBody" with the actual name of the rigid body being tracked by Motive.
+Replace `"Your_Windows_IP"` with your actual Windows IP (use `ipconfig` to find it).  
+Replace `"TestBody"` with the actual name of the rigid body being tracked by Motive.
 
 3. **Build and Source the Workspace**:
 
 After creating the launch file, build and source your workspace:
 
-bash
+```bash
 cd ~/turtlebot3_ws
 catkin_make
 source devel/setup.bash
-
-
+```
 
 ### 4. Important Note for WSL Users
 
-When using WSL, do **not** use 127.0.0.1 for the VRPN server address. The IP 127.0.0.1 refers to the WSL environment and not your Windows machine. Instead, use the IP address of your Windows machine (e.g., 10.8.2.136), which you can find by running ipconfig in a Windows command prompt.
+When using WSL, do **not** use `127.0.0.1` for the VRPN server address. The IP `127.0.0.1` refers to the WSL environment and not your Windows machine. Instead, use the IP address of your Windows machine (e.g., `10.8.2.136`), which you can find by running `ipconfig` in a Windows command prompt.
 
 ### 5. Test the Setup
 
@@ -122,11 +119,10 @@ When using WSL, do **not** use 127.0.0.1 for the VRPN server address. The IP 127
 
 2. **Launch the TurtleBot3 and VRPN Setup** in WSL:
 
-bash
+```bash
 export TURTLEBOT3_MODEL=burger
 roslaunch turtlebot3 turtlebot3_vrpn.launch
-
-
+```
 
 ### 6. Verify the Setup in ROS
 
@@ -134,42 +130,39 @@ roslaunch turtlebot3 turtlebot3_vrpn.launch
 
 Verify that the VRPN topics are available in ROS by running:
 
-bash
+```bash
 rostopic list
+```
 
-
-
-You should see topics like /vrpn/TestBody/pose.
+You should see topics like `/vrpn/TestBody/pose`.
 
 2. **Inspect the Pose Data**:
 
 Inspect the pose data of the tracked body from OptiTrack:
 
-bash
+```bash
 rostopic echo /vrpn/TestBody/pose
-
-
+```
 
 3. **Visualize the Setup in RViz**:
 
 Open RViz by running:
 
-bash
+```bash
 rviz
-
-
+```
 
 In RViz, follow these steps:
 - Click the **"Add"** button in the lower-left corner.
-- Select **"By Topic"** and expand the /vrpn topic.
-- Choose the **"Pose"** option under /vrpn/TestBody/pose to visualize the tracked pose.
+- Select **"By Topic"** and expand the `/vrpn` topic.
+- Choose the **"Pose"** option under `/vrpn/TestBody/pose` to visualize the tracked pose.
 - Add a **RobotModel** display to visualize the TurtleBot3 model.
-- Set the **Fixed Frame** to world.
+- Set the **Fixed Frame** to `world`.
 
 ### Troubleshooting
 
 1. **Connection Issues**: Ensure that Motive and ROS can communicate over the same network using the correct IP address of the Windows machine.
-2. **Firewall Issues**: Ensure that firewall rules allow traffic over the VRPN port (default 3883).
-3. **Network Configuration**: If using WSL, use your Windows IP (not 127.0.0.1) for the VRPN server address.
+2. **Firewall Issues**: Ensure that firewall rules allow traffic over the VRPN port (default `3883`).
+3. **Network Configuration**: If using WSL, use your Windows IP (not `127.0.0.1`) for the VRPN server address.
 
 With these steps, you should now be able to control and visualize TurtleBot3 using real-time OptiTrack motion capture data streamed over VRPN in ROS Melodic.
