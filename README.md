@@ -4,7 +4,6 @@
 
 - **Docker** is installed and running on your system.
 - **Visual Studio Code (VSCode)** is installed, along with the Remote Development extension.
-- Internet access to download necessary packages.
 
 ---
 
